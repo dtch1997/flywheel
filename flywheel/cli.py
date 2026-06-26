@@ -10,13 +10,16 @@ Subcommands:
   status   summarise the backlog + today's spend
   prompt   print the assembled iteration prompt (for in-harness /loop use)
   run      drive N headless iterations via the configured agent runner
+  dashboard  render (and optionally serve) a live status page via stagehand
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import time
 from typing import Optional
 
 from .config import Config
@@ -296,6 +299,82 @@ def cmd_run(args) -> int:
     return 0
 
 
+# --- dashboard (optional, via stagehand) --------------------------------
+# Map backlog statuses onto stagehand's colour vocabulary (running/done/failed).
+_DASH_STATE = {"proposed": "proposed", "picked": "running", "running": "running",
+               "done": "done", "dropped": "failed"}
+
+
+def _dashboard_monitors(cfg):
+    """Project the backlog into stagehand monitor-dicts (one root per idea).
+
+    Each idea is a root; live `*.progress.json` units written by a running
+    iteration (parent = idea id) nest underneath. The backlog carries the
+    permanent state, so those live files can be ephemeral (cleanup=True)."""
+    monitors = []
+    for idea in cfg.backlog().all():
+        st = _DASH_STATE.get(str(idea.status), str(idea.status))
+        extra = {"tier": idea.tier, "prio": idea.priority}
+        if idea.strikes:
+            extra["strikes"] = idea.strikes
+        if idea.cost:
+            extra["cost"] = idea.cost
+        monitors.append({
+            "name": idea.id, "parent": None, "total": 1,
+            "done": 1 if st == "done" else 0, "state": st,
+            "started": None, "ended": None, "extra": extra, "meta": {},
+        })
+    return monitors
+
+
+def _dashboard_html(cfg, stagehand):
+    backlog = cfg.backlog().all()
+    spent = cfg.ledger().spent_today()
+    done = sum(1 for i in backlog if str(i.status) == "done")
+    proj = os.path.basename(os.path.abspath(cfg.root)) or "flywheel"
+    title = (f"flywheel · {proj} · ${spent:.0f}/${cfg.daily_budget_usd:.0f} today "
+             f"· {done}/{len(backlog)} done")
+    live = stagehand.read_monitors(cfg.root)          # live iteration progress
+    return stagehand.render_dashboard(
+        _dashboard_monitors(cfg) + live, started=time.time(), title=title)
+
+
+def cmd_dashboard(args) -> int:
+    cfg = _load(args)
+    try:
+        import stagehand
+    except ImportError:
+        print("flywheel dashboard needs stagehand:\n"
+              "  uv tool install --force <flywheel> --with stagehand\n"
+              "  (or `pip install` it into the same env)", file=sys.stderr)
+        return 1
+    out = os.path.join(cfg.root, "status.html")
+
+    def regen():
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(_dashboard_html(cfg, stagehand))
+
+    regen()
+    print(f"wrote {out}", flush=True)
+    stop = None
+    if args.serve:
+        url, stop = stagehand.serve(cfg.root)
+        print(url, flush=True)   # flush: under --watch this process stays alive
+    if not (args.serve or args.watch):
+        return 0
+    # keep the process alive, regenerating so the auto-refreshing page is live
+    try:
+        while True:
+            time.sleep(args.interval)
+            regen()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if stop:
+            stop()
+    return 0
+
+
 # --- parser --------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="flywheel", description=__doc__)
@@ -359,6 +438,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--max-iters", type=int, default=1)
     sp.add_argument("-v", "--verbose", action="store_true")
     sp.set_defaults(func=cmd_run)
+
+    sp = sub.add_parser("dashboard", help="render/serve a live status page (needs stagehand)")
+    sp.add_argument("--serve", action="store_true", help="serve behind a Cloudflare tunnel")
+    sp.add_argument("--watch", action="store_true", help="keep regenerating the page")
+    sp.add_argument("--interval", type=float, default=3.0, help="watch/serve regen seconds")
+    sp.set_defaults(func=cmd_dashboard)
 
     return p
 
