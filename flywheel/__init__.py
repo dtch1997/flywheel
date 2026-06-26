@@ -15,6 +15,7 @@ from .config import Config
 from .provenance import (
     current_session_id, transcript_path, archive_transcript,
 )
+from .triage import build_triage_prompt, apply_triage, parse_rankings
 
 __version__ = "0.1.0"
 
@@ -39,5 +40,8 @@ __all__ = [
     "current_session_id",
     "transcript_path",
     "archive_transcript",
+    "build_triage_prompt",
+    "apply_triage",
+    "parse_rankings",
     "__version__",
 ]

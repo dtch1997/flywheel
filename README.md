@@ -93,8 +93,30 @@ protocol_file = "EXPERIMENT_PROTOCOL.md"      # override the built-in protocol
 | `flywheel status` | counts + spend + next pick |
 | `flywheel prompt` | print the iteration prompt (in-harness driver) |
 | `flywheel run --max-iters N` | drive N headless iterations |
+| `flywheel triage [--run \| --apply -]` | an agent re-prioritizes the backlog |
 | `flywheel dashboard [--serve] [--watch]` | live status page via stagehand (optional) |
 | `flywheel session --idea <id> [--archive DIR]` | record the agent session (provenance) on an idea |
+
+## Triage — judgment, not just FIFO
+
+`select()` pops the highest-priority idea, but priority is a static integer set
+when an idea was filed — so the head of the queue drifts out of date as results
+come in. **Triage** is the judgment layer: an agent reads the north stars + the
+whole backlog + what's already been learned, and **rewrites priorities** (and
+drops stale/subsumed ideas) so the next pick reflects current taste. Judgment
+(the agent) stays separate from mechanism (`select`, deterministic).
+
+```bash
+flywheel triage                 # print the triage prompt (in-harness); the agent
+                                # returns {"rankings":[...],"drop":[...]} JSON ...
+flywheel triage --apply -       # ... which you pipe back in to apply + log it
+flywheel triage --run           # or: run the triage agent headlessly and apply
+```
+
+The triage agent is told to reward **replicating a surprising-but-unconfirmed
+result** over piling up new hypotheses, and to weigh novelty, info-per-dollar,
+and north-star fit. Each pass is logged to `.flywheel/triage.jsonl`. Drive the
+loop as **triage → `next` → run** instead of blindly popping the queue.
 
 ## Session provenance
 
