@@ -84,7 +84,8 @@ class MarkdownBacklog:
     """
 
     # Keys serialised as their own link sub-entries rather than top-level fields.
-    LINK_KEYS = ("spec", "postmortem", "results", "pr")
+    # `session` / `transcript` are provenance: the agent session + its decision trace.
+    LINK_KEYS = ("spec", "postmortem", "results", "pr", "session", "transcript")
     HEADER = "# Experiment queue\n"
 
     def __init__(self, path: str):

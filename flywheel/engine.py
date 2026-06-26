@@ -107,6 +107,14 @@ class LoopEngine:
         if current is None:  # agent removed it — respect that
             return "idea removed by agent", "removed"
 
+        # provenance: record which session produced this run (even on failure),
+        # and auto-log the reported cost so the budget stays honest.
+        if result.session_id:
+            self.backlog.update(idea.id, links={"session": result.session_id})
+        if result.cost_usd and self.guardrails.ledger is not None:
+            self.guardrails.ledger.record(
+                result.cost_usd, idea_id=idea.id, note="claude -p reported cost")
+
         if not result.ok:
             strikes = current.strikes + 1
             if strikes >= self.guardrails.max_strikes:

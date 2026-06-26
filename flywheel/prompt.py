@@ -52,6 +52,10 @@ This was selected from the backlog. Do THIS one (don't re-pick):
   (At {max_strikes} strikes an idea is auto-dropped — escalate or drop.)
 - Log spend so the daily budget stays accurate:
     {cli} spend <dollars> --idea {idea_id} --note "<what>"
+- Record provenance — the session behind this decision (so it can be reviewed):
+    {cli} session --idea {idea_id} --archive <run_dir>
+  (headless `flywheel run` records the session id automatically; this is for the
+  in-harness case.)
 - File each follow-up you brainstormed back onto the backlog:
     {cli} add --hypothesis "<one line>" --rationale "<why interesting>" \\
         --tier <0|1|2> --cost "<$est>" --source {idea_id} --priority <n>

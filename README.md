@@ -88,11 +88,32 @@ protocol_file = "EXPERIMENT_PROTOCOL.md"      # override the built-in protocol
 | `flywheel add` | add an idea (`--hypothesis … --tier … --cost …`, or `--json -`) |
 | `flywheel list [-v]` | show the backlog (filter `--status` / `--tier`) |
 | `flywheel next` | show the next pick (and why others are blocked) |
-| `flywheel update <id>` | set `--status` / `--strikes` / links (`--spec --postmortem --results --pr`) |
+| `flywheel update <id>` | set `--status` / `--strikes` / links (`--spec --postmortem --results --pr --session --transcript`) |
 | `flywheel spend <usd>` | log spend against the daily budget |
 | `flywheel status` | counts + spend + next pick |
 | `flywheel prompt` | print the iteration prompt (in-harness driver) |
 | `flywheel run --max-iters N` | drive N headless iterations |
+| `flywheel dashboard [--serve] [--watch]` | live status page via stagehand (optional) |
+| `flywheel session --idea <id> [--archive DIR]` | record the agent session (provenance) on an idea |
+
+## Session provenance
+
+The backlog records *what* was decided; the session transcript records *why*. So
+each iteration can carry the agent session behind it as a link, and reviewing an
+experiment opens its full decision trace.
+
+- **Headless** (`flywheel run`): the `ClaudeCliRunner` runs with
+  `--output-format json`, parses `session_id` + `total_cost_usd`, and the engine
+  records the `session` link and auto-logs the cost as spend — no extra step.
+- **In-harness** (`/loop`): the agent records its own session with
+  `flywheel session --idea <id> --archive <run_dir>`, which reads
+  `$CLAUDE_CODE_SESSION_ID`, attaches the `session` link, and copies the
+  transcript (`~/.claude/projects/**/<id>.jsonl`) next to the experiment for
+  durable provenance.
+
+```python
+from flywheel import current_session_id, transcript_path, archive_transcript
+```
 
 ## Guardrails
 
