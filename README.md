@@ -17,7 +17,7 @@ in-harness or headless) does the experiment.
 ## Install
 
 ```bash
-pip install -e .          # or: pip install git+ssh://git@github.com/ArcadiaImpact/flywheel.git
+pip install -e .          # or: pip install git+ssh://git@github.com/dtch1997/flywheel.git
 # on this box the CLI is installed as a tool: uv tool install ./repos/flywheel
 ```
 
