@@ -12,6 +12,9 @@ from .guardrails import Guardrails, SpendLedger, parse_cost
 from .runner import AgentRunner, ClaudeCliRunner, EmitRunner, RunResult
 from .engine import LoopEngine, StepResult
 from .config import Config
+from .provenance import (
+    current_session_id, transcript_path, archive_transcript,
+)
 
 __version__ = "0.1.0"
 
@@ -33,5 +36,8 @@ __all__ = [
     "LoopEngine",
     "StepResult",
     "Config",
+    "current_session_id",
+    "transcript_path",
+    "archive_transcript",
     "__version__",
 ]

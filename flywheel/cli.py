@@ -11,6 +11,7 @@ Subcommands:
   prompt   print the assembled iteration prompt (for in-harness /loop use)
   run      drive N headless iterations via the configured agent runner
   dashboard  render (and optionally serve) a live status page via stagehand
+  session  record the agent session (provenance) on an idea
 """
 
 from __future__ import annotations
@@ -216,7 +217,7 @@ def cmd_update(args) -> int:
     if args.notes is not None:
         fields["notes"] = args.notes
     links = {}
-    for k in ("spec", "postmortem", "results", "pr"):
+    for k in ("spec", "postmortem", "results", "pr", "session", "transcript"):
         v = getattr(args, k)
         if v is not None:
             links[k] = v
@@ -319,6 +320,8 @@ def _dashboard_monitors(cfg):
             extra["strikes"] = idea.strikes
         if idea.cost:
             extra["cost"] = idea.cost
+        if idea.links.get("session"):
+            extra["session"] = idea.links["session"][:8]  # provenance marker
         monitors.append({
             "name": idea.id, "parent": None, "total": 1,
             "done": 1 if st == "done" else 0, "state": st,
@@ -375,6 +378,39 @@ def cmd_dashboard(args) -> int:
     return 0
 
 
+def cmd_session(args) -> int:
+    from . import provenance
+
+    sid = args.id or provenance.current_session_id()
+    if not sid:
+        print("no session id (pass --id or run inside Claude Code so "
+              "$CLAUDE_CODE_SESSION_ID is set)", file=sys.stderr)
+        return 1
+    tpath = provenance.transcript_path(sid)
+    if args.archive:
+        archived = provenance.archive_transcript(sid, args.archive)
+        if archived:
+            tpath = archived
+            print(f"archived transcript -> {archived}")
+        else:
+            print(f"warning: transcript for {sid} not found to archive", file=sys.stderr)
+    if args.idea:
+        cfg = _load(args)
+        links = {"session": sid}
+        if tpath:
+            links["transcript"] = tpath
+        try:
+            cfg.backlog().update(args.idea, links=links)
+        except KeyError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print(f"recorded session {sid} on {args.idea}")
+    else:
+        print(f"session: {sid}")
+        print(f"transcript: {tpath or '(not found)'}")
+    return 0
+
+
 # --- parser --------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="flywheel", description=__doc__)
@@ -418,6 +454,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--postmortem")
     sp.add_argument("--results")
     sp.add_argument("--pr")
+    sp.add_argument("--session", help="agent session id (provenance)")
+    sp.add_argument("--transcript", help="path to the session transcript")
     sp.set_defaults(func=cmd_update)
 
     sp = sub.add_parser("spend", help="log spend")
@@ -444,6 +482,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--watch", action="store_true", help="keep regenerating the page")
     sp.add_argument("--interval", type=float, default=3.0, help="watch/serve regen seconds")
     sp.set_defaults(func=cmd_dashboard)
+
+    sp = sub.add_parser("session", help="record the agent session (provenance) on an idea")
+    sp.add_argument("--idea", help="idea id to attach the session to")
+    sp.add_argument("--id", help="session id (default: $CLAUDE_CODE_SESSION_ID)")
+    sp.add_argument("--archive", metavar="DIR",
+                    help="copy the transcript into DIR for durable provenance")
+    sp.set_defaults(func=cmd_session)
 
     return p
 

@@ -22,6 +22,8 @@ class RunResult:
     output: str
     returncode: Optional[int] = None
     error: str = ""
+    session_id: str = ""           # provenance: the agent session behind this run
+    cost_usd: Optional[float] = None  # reported spend, if the runner knows it
 
 
 @runtime_checkable
@@ -50,13 +52,35 @@ class ClaudeCliRunner:
     model: str = ""
     extra_args: tuple = ()
     timeout: Optional[int] = None  # seconds; None = no limit
+    capture_session: bool = True   # request JSON output to recover session_id + cost
 
     def _cmd(self, prompt: str) -> list[str]:
         cmd = [self.bin, "-p", prompt]
         if self.model:
             cmd += ["--model", self.model]
+        # only add --output-format if the caller hasn't set one already
+        if self.capture_session and not any(
+            a == "--output-format" for a in self.extra_args
+        ):
+            cmd += ["--output-format", "json"]
         cmd += list(self.extra_args)
         return cmd
+
+    def _parse(self, stdout: str) -> tuple[str, str, Optional[float]]:
+        """Return (text, session_id, cost) from a `--output-format json` result.
+        Falls back to raw stdout if it isn't the expected JSON object."""
+        import json
+        try:
+            obj = json.loads(stdout)
+            if isinstance(obj, dict):
+                return (
+                    obj.get("result", stdout),
+                    obj.get("session_id", "") or "",
+                    obj.get("total_cost_usd"),
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return stdout, "", None
 
     def run(self, prompt: str, cwd: str) -> RunResult:
         try:
@@ -75,9 +99,15 @@ class ClaudeCliRunner:
             return RunResult(
                 ok=False, output="", error=f"agent timed out after {self.timeout}s"
             )
+        text, session_id, cost = (
+            self._parse(proc.stdout) if self.capture_session
+            else (proc.stdout, "", None)
+        )
         return RunResult(
             ok=proc.returncode == 0,
-            output=proc.stdout,
+            output=text,
             returncode=proc.returncode,
             error=proc.stderr if proc.returncode != 0 else "",
+            session_id=session_id,
+            cost_usd=cost,
         )
