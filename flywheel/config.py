@@ -47,6 +47,7 @@ class Config:
     root: str = "."
     backlog_path: str = "queue.md"
     ledger_path: str = ".flywheel/spend.jsonl"
+    triage_log_path: str = ".flywheel/triage.jsonl"
     cli: str = "flywheel"
 
     sources: list[dict] = field(default_factory=lambda: list(DEFAULT_SOURCES))
@@ -101,6 +102,7 @@ class Config:
         c = cls(root=root)
         c.backlog_path = data.get("backlog_path", c.backlog_path)
         c.ledger_path = data.get("ledger_path", c.ledger_path)
+        c.triage_log_path = data.get("triage_log_path", c.triage_log_path)
         c.cli = data.get("cli", c.cli)
         if "sources" in data:
             c.sources = data["sources"]
@@ -131,6 +133,9 @@ class Config:
 
     def ledger(self) -> SpendLedger:
         return SpendLedger(self._abs(self.ledger_path))
+
+    def triage_log(self) -> str:
+        return self._abs(self.triage_log_path)
 
     def guardrails(self) -> Guardrails:
         return Guardrails(

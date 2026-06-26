@@ -10,6 +10,7 @@ Subcommands:
   status   summarise the backlog + today's spend
   prompt   print the assembled iteration prompt (for in-harness /loop use)
   run      drive N headless iterations via the configured agent runner
+  triage   an agent re-prioritizes the backlog (north stars + what's learned)
   dashboard  render (and optionally serve) a live status page via stagehand
   session  record the agent session (provenance) on an idea
 """
@@ -300,6 +301,48 @@ def cmd_run(args) -> int:
     return 0
 
 
+def _triage_prompt(cfg):
+    from . import triage
+    ideas = cfg.backlog().all()
+    proposed = [i for i in ideas if i.status in (Status.PROPOSED, Status.PICKED)]
+    done = [i for i in ideas if i.status in (Status.DONE, Status.DROPPED)]
+    return triage.build_triage_prompt(cfg.context_loader().load(), proposed, done)
+
+
+def _apply_triage(cfg, obj) -> int:
+    from . import triage
+    summary = triage.apply_triage(cfg.backlog(), obj.get("rankings", []),
+                                  obj.get("drop", []), log_path=cfg.triage_log())
+    for iid, prio, reason in summary["updated"]:
+        print(f"  prio {prio:>2}  {iid}  — {reason}")
+    for iid, reason in summary["dropped"]:
+        print(f"  DROP     {iid}  — {reason}")
+    if summary["skipped"]:
+        print(f"  (skipped unknown ids: {', '.join(filter(None, summary['skipped']))})")
+    return 0
+
+
+def cmd_triage(args) -> int:
+    cfg = _load(args)
+    if args.apply:
+        import json as _json
+        raw = sys.stdin.read() if args.apply == "-" else open(args.apply).read()
+        return _apply_triage(cfg, _json.loads(raw))
+    if args.run:
+        from . import triage
+        from .runner import ClaudeCliRunner
+        runner = ClaudeCliRunner(bin=cfg.claude_bin, model=cfg.model,
+                                 extra_args=tuple(cfg.claude_args), timeout=cfg.timeout or None)
+        res = runner.run(_triage_prompt(cfg), cwd=cfg.root)
+        if not res.ok:
+            print(f"triage agent failed: {res.error}", file=sys.stderr)
+            return 1
+        return _apply_triage(cfg, triage.parse_rankings(res.output))
+    # default: print the prompt for an in-harness agent to act on
+    print(_triage_prompt(cfg))
+    return 0
+
+
 # --- dashboard (optional, via stagehand) --------------------------------
 # Map backlog statuses onto stagehand's colour vocabulary (running/done/failed).
 _DASH_STATE = {"proposed": "proposed", "picked": "running", "running": "running",
@@ -476,6 +519,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--max-iters", type=int, default=1)
     sp.add_argument("-v", "--verbose", action="store_true")
     sp.set_defaults(func=cmd_run)
+
+    sp = sub.add_parser("triage", help="re-prioritize the backlog (agent judgment)")
+    sp.add_argument("--apply", metavar="FILE", help="apply a rankings JSON ('-' for stdin)")
+    sp.add_argument("--run", action="store_true", help="run the triage agent headlessly + apply")
+    sp.set_defaults(func=cmd_triage)
 
     sp = sub.add_parser("dashboard", help="render/serve a live status page (needs stagehand)")
     sp.add_argument("--serve", action="store_true", help="serve behind a Cloudflare tunnel")
