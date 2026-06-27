@@ -14,8 +14,17 @@ dependencies = [
     "tomli; python_version < '3.11'",
 ]
 
+[project.optional-dependencies]
+# Output gate: validate a run's report against the reportly standard.
+reportly = ["reportly @ git+https://github.com/dtch1997/reportly.git"]
+# Live status dashboard.
+dashboard = ["stagehand @ git+https://github.com/dtch1997/stagehand.git"]
+
 [project.scripts]
 flywheel = "flywheel.cli:main"
+
+[tool.hatch.metadata]
+allow-direct-references = true   # git refs in [project.optional-dependencies]
 
 [tool.hatch.build.targets.wheel]
 packages = ["flywheel"]

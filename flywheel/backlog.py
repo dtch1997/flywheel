@@ -75,6 +75,7 @@ class MarkdownBacklog:
         - **spec**:
         - **postmortem**:
         - **results**:
+        - **report**:
         - **pr**:
 
         free-form notes until the next ## or EOF
@@ -84,8 +85,9 @@ class MarkdownBacklog:
     """
 
     # Keys serialised as their own link sub-entries rather than top-level fields.
+    # `report` is the run's required output (gated at the done transition);
     # `session` / `transcript` are provenance: the agent session + its decision trace.
-    LINK_KEYS = ("spec", "postmortem", "results", "pr", "session", "transcript")
+    LINK_KEYS = ("spec", "postmortem", "results", "report", "pr", "session", "transcript")
     HEADER = "# Experiment queue\n"
 
     def __init__(self, path: str):

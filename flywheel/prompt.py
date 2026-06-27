@@ -13,8 +13,13 @@ DEFAULT_PROTOCOL = """\
    prediction with a confidence, the design, positive AND negative controls,
    and a cost estimate. An experiment that fails its controls is discarded.
 2. RUN IT. Execute the experiment. Keep it cheap-first (dry-run, then scale).
-3. WRITE UP. Record results vs the registered prediction. Flag any surprise
-   (result contradicts prediction) prominently — discovery or bug.
+3. WRITE UP. Produce a report — this is the run's required output. Record
+   results vs the registered prediction and flag any surprise (result
+   contradicts prediction) prominently — discovery or bug. The report must
+   satisfy the project's report standard (a reportly-valid `.md`: finding-as-H1;
+   TL;DR / Setup / Result / Discussion / Next steps / Reproduce sections; a
+   headline figure or table in Result; commands in Reproduce; a provenance
+   footer). You will NOT be able to mark the idea `done` without a valid report.
 4. REPRODUCIBILITY. Commit the spec + exact command + seeds/config so a fresh
    run regenerates the result. Persist large artifacts to durable storage and
    commit a pointer, not the bytes.
@@ -43,8 +48,10 @@ This was selected from the backlog. Do THIS one (don't re-pick):
 {protocol}
 
 == BOOKKEEPING (do this with the flywheel CLI) ==
-- When you finish, record the outcome and artifact links:
+- When you finish, record the outcome and artifact links. `--report` is
+  REQUIRED to close out: the done transition is gated on a valid report.
     {cli} update {idea_id} --status done \\
+        --report <report.md> \\
         --spec <path> --postmortem <path> --results <path> --pr <url>
   If the run was uninformative (no signal, broken harness you couldn't fix),
   instead add a strike:
