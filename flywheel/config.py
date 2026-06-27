@@ -48,6 +48,7 @@ class Config:
     backlog_path: str = "queue.md"
     ledger_path: str = ".flywheel/spend.jsonl"
     triage_log_path: str = ".flywheel/triage.jsonl"
+    critique_log_path: str = ".flywheel/critique.jsonl"
     cli: str = "flywheel"
 
     sources: list[dict] = field(default_factory=lambda: list(DEFAULT_SOURCES))
@@ -73,6 +74,11 @@ class Config:
     output_validator: str = "reportly"   # "reportly" | "none"
     output_level: str = "error"          # "error" | "warn" (reportly fail threshold)
     report_link: str = "report"          # which link field holds the report path
+
+    # critique — grade the report against a rubric, feed it back (see critique.py)
+    critique_rubric_file: str = ""       # path to the rubric md; empty = built-in AMR
+    critique_dir: str = "critiques"      # where critique artifacts are written
+    critique_file_followups: bool = True # file R-fix follow-ups onto the backlog
 
     # --- loading ----------------------------------------------------------
     @classmethod
@@ -109,6 +115,7 @@ class Config:
         c.backlog_path = data.get("backlog_path", c.backlog_path)
         c.ledger_path = data.get("ledger_path", c.ledger_path)
         c.triage_log_path = data.get("triage_log_path", c.triage_log_path)
+        c.critique_log_path = data.get("critique_log_path", c.critique_log_path)
         c.cli = data.get("cli", c.cli)
         if "sources" in data:
             c.sources = data["sources"]
@@ -133,6 +140,10 @@ class Config:
         c.output_validator = o.get("validator", c.output_validator)
         c.output_level = o.get("level", c.output_level)
         c.report_link = o.get("report_link", c.report_link)
+        cr = data.get("critique", {})
+        c.critique_rubric_file = cr.get("rubric_file", c.critique_rubric_file)
+        c.critique_dir = cr.get("dir", c.critique_dir)
+        c.critique_file_followups = cr.get("file_followups", c.critique_file_followups)
         return c
 
     # --- builders ---------------------------------------------------------
@@ -147,6 +158,20 @@ class Config:
 
     def triage_log(self) -> str:
         return self._abs(self.triage_log_path)
+
+    def critique_log(self) -> str:
+        return self._abs(self.critique_log_path)
+
+    def critique_dir_abs(self) -> str:
+        return self._abs(self.critique_dir)
+
+    def rubric_text(self) -> str:
+        """The critique rubric: the configured file, else the built-in AMR rubric."""
+        if self.critique_rubric_file:
+            with open(self._abs(self.critique_rubric_file), encoding="utf-8") as f:
+                return f.read()
+        from .critique import DEFAULT_RUBRIC
+        return DEFAULT_RUBRIC
 
     def guardrails(self) -> Guardrails:
         return Guardrails(

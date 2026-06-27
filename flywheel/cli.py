@@ -11,6 +11,7 @@ Subcommands:
   prompt   print the assembled iteration prompt (for in-harness /loop use)
   run      drive N headless iterations via the configured agent runner
   triage   an agent re-prioritizes the backlog (north stars + what's learned)
+  critique an agent grades a finished report against the rubric (feedback)
   dashboard  render (and optionally serve) a live status page via stagehand
   session  record the agent session (provenance) on an idea
 """
@@ -53,6 +54,15 @@ path  = "NORTH_STARS.md"
 # n          = 5
 # max_chars  = 3000
 
+# Recommended: feed recent critiques back in, so each iteration sees what the
+# last experiments could (and couldn't) conclude (see the [critique] block).
+# [[sources]]
+# kind       = "recent_glob"
+# label      = "recent critiques"
+# pattern    = "critiques/*.md"
+# n          = 5
+# max_chars  = 2000
+
 [guardrails]
 max_tier         = 2      # highest cost tier the loop may pick unattended
 daily_budget_usd = 50.0   # the real rail for "fully autonomous"
@@ -76,6 +86,14 @@ require_report = true
 validator      = "reportly"   # "reportly" (lint the report) | "none" (exists-only)
 level          = "error"      # reportly fail threshold: "error" | "warn"
 report_link    = "report"     # which link field holds the report path
+
+[critique]
+# After a report exists, `flywheel critique <id>` grades it against a rubric and
+# records what can ACTUALLY be concluded — feedback for later iterations, never a
+# gate. Default rubric is the built-in AMR evidence framework.
+# rubric_file  = "RUBRIC.md"   # override the built-in AMR rubric
+dir            = "critiques"   # where critique artifacts are written
+file_followups = true          # file the rubric-driven follow-ups onto the backlog
 """
 
 
@@ -371,6 +389,78 @@ def cmd_triage(args) -> int:
     return 0
 
 
+def _pick_critique_target(cfg, idea_id):
+    """The experiment to critique: the given id, else the most-recently-done one
+    that has a report but no critique yet (the one the loop just finished)."""
+    backlog = cfg.backlog()
+    if idea_id:
+        return backlog.get(idea_id)
+    candidates = [
+        i for i in backlog.all()
+        if i.status == Status.DONE and i.links.get(cfg.report_link)
+        and not i.links.get("critique")
+    ]
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda i: i.created)[-1]
+
+
+def _critique_prompt(cfg, idea):
+    from . import critique
+    report_link = idea.links.get(cfg.report_link, "")
+    path = report_link if os.path.isabs(report_link) else os.path.join(cfg.root, report_link)
+    if not report_link or not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        report = f.read()
+    return critique.build_critique_prompt(
+        cfg.rubric_text(), report, idea, context=cfg.context_loader().load())
+
+
+def _apply_critique(cfg, idea_id, verdict) -> int:
+    from . import critique
+    summary = critique.apply_critique(
+        cfg.backlog(), idea_id, verdict,
+        critique_dir=cfg.critique_dir_abs(), root=cfg.root,
+        log_path=cfg.critique_log(), file_followups=cfg.critique_file_followups)
+    print(f"  {summary['verdict_line']}")
+    print(f"  wrote {summary['critique_path']}")
+    if summary["filed"]:
+        print(f"  filed follow-ups: {', '.join(summary['filed'])}")
+    return 0
+
+
+def cmd_critique(args) -> int:
+    cfg = _load(args)
+    idea = _pick_critique_target(cfg, args.id)
+    if idea is None:
+        print("no experiment to critique (pass an id, or finish a run with a "
+              "report first)", file=sys.stderr)
+        return 1
+    if args.apply:
+        import json as _json
+        raw = sys.stdin.read() if args.apply == "-" else open(args.apply).read()
+        return _apply_critique(cfg, idea.id, _json.loads(raw))
+    prompt = _critique_prompt(cfg, idea)
+    if prompt is None:
+        print(f"no report to critique on {idea.id!r} (set its --{cfg.report_link} "
+              "link to an existing file first)", file=sys.stderr)
+        return 1
+    if args.run:
+        from . import critique
+        from .runner import ClaudeCliRunner
+        runner = ClaudeCliRunner(bin=cfg.claude_bin, model=cfg.model,
+                                 extra_args=tuple(cfg.claude_args), timeout=cfg.timeout or None)
+        res = runner.run(prompt, cwd=cfg.root)
+        if not res.ok:
+            print(f"critique agent failed: {res.error}", file=sys.stderr)
+            return 1
+        return _apply_critique(cfg, idea.id, critique.parse_critique(res.output))
+    # default: print the prompt for an in-harness agent to act on
+    print(prompt)
+    return 0
+
+
 # --- dashboard (optional, via stagehand) --------------------------------
 # Map backlog statuses onto stagehand's colour vocabulary (running/done/failed).
 _DASH_STATE = {"proposed": "proposed", "picked": "running", "running": "running",
@@ -555,6 +645,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--apply", metavar="FILE", help="apply a rankings JSON ('-' for stdin)")
     sp.add_argument("--run", action="store_true", help="run the triage agent headlessly + apply")
     sp.set_defaults(func=cmd_triage)
+
+    sp = sub.add_parser("critique", help="grade a finished report against the rubric (feedback)")
+    sp.add_argument("id", nargs="?", help="experiment to critique (default: last done w/ report, no critique)")
+    sp.add_argument("--apply", metavar="FILE", help="apply a verdict JSON ('-' for stdin)")
+    sp.add_argument("--run", action="store_true", help="run the critique agent headlessly + apply")
+    sp.set_defaults(func=cmd_critique)
 
     sp = sub.add_parser("dashboard", help="render/serve a live status page (needs stagehand)")
     sp.add_argument("--serve", action="store_true", help="serve behind a Cloudflare tunnel")

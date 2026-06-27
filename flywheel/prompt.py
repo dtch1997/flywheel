@@ -63,7 +63,12 @@ This was selected from the backlog. Do THIS one (don't re-pick):
     {cli} session --idea {idea_id} --archive <run_dir>
   (headless `flywheel run` records the session id automatically; this is for the
   in-harness case.)
-- File each follow-up you brainstormed back onto the backlog:
+- Critique the report against the rubric — grade what can ACTUALLY be concluded.
+  This is feedback, not a gate; it records the verdict and files the rubric's
+  fixes as follow-ups for later iterations:
+    {cli} critique {idea_id}            # prints the critique prompt; do it, then
+    {cli} critique {idea_id} --apply -  # pipe the verdict JSON back in
+- File any other follow-ups you brainstormed back onto the backlog:
     {cli} add --hypothesis "<one line>" --rationale "<why interesting>" \\
         --tier <0|1|2> --cost "<$est>" --source {idea_id} --priority <n>
 
