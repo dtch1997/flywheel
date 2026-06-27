@@ -68,6 +68,12 @@ class Config:
     protocol_file: str = ""
     template_file: str = ""
 
+    # output gate — what a finished run must leave behind (see output.py)
+    require_report: bool = True
+    output_validator: str = "reportly"   # "reportly" | "none"
+    output_level: str = "error"          # "error" | "warn" (reportly fail threshold)
+    report_link: str = "report"          # which link field holds the report path
+
     # --- loading ----------------------------------------------------------
     @classmethod
     def find(cls, start: str = ".") -> Optional[str]:
@@ -122,6 +128,11 @@ class Config:
         p = data.get("prompt", {})
         c.protocol_file = p.get("protocol_file", c.protocol_file)
         c.template_file = p.get("template_file", c.template_file)
+        o = data.get("output", {})
+        c.require_report = o.get("require_report", c.require_report)
+        c.output_validator = o.get("validator", c.output_validator)
+        c.output_level = o.get("level", c.output_level)
+        c.report_link = o.get("report_link", c.report_link)
         return c
 
     # --- builders ---------------------------------------------------------
@@ -148,6 +159,16 @@ class Config:
     def context_loader(self) -> ContextLoader:
         sources = [Source(**s) for s in self.sources]
         return ContextLoader(root=self.root, sources=sources)
+
+    def gate(self):
+        from .output import make_gate
+        return make_gate(
+            self.output_validator,
+            root=self.root,
+            level=self.output_level,
+            link_field=self.report_link,
+            require_report=self.require_report,
+        )
 
     def protocol_text(self) -> Optional[str]:
         if self.protocol_file:

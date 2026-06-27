@@ -88,7 +88,7 @@ protocol_file = "EXPERIMENT_PROTOCOL.md"      # override the built-in protocol
 | `flywheel add` | add an idea (`--hypothesis … --tier … --cost …`, or `--json -`) |
 | `flywheel list [-v]` | show the backlog (filter `--status` / `--tier`) |
 | `flywheel next` | show the next pick (and why others are blocked) |
-| `flywheel update <id>` | set `--status` / `--strikes` / links (`--spec --postmortem --results --pr --session --transcript`) |
+| `flywheel update <id>` | set `--status` / `--strikes` / links (`--spec --postmortem --results --report --pr --session --transcript`); `--status done` is gated on a valid report (`--no-gate` to override) |
 | `flywheel spend <usd>` | log spend against the daily budget |
 | `flywheel status` | counts + spend + next pick |
 | `flywheel prompt` | print the iteration prompt (in-harness driver) |
@@ -117,6 +117,42 @@ The triage agent is told to reward **replicating a surprising-but-unconfirmed
 result** over piling up new hypotheses, and to weigh novelty, info-per-dollar,
 and north-star fit. Each pass is logged to `.flywheel/triage.jsonl`. Drive the
 loop as **triage → `next` → run** instead of blindly popping the queue.
+
+## Output gate — a run must leave something behind
+
+The loop's *input* is an idea; its *output* should be a durable, reviewable
+report. Without enforcement, an idea can be marked `done` with no artifact — the
+flywheel turns but leaves nothing behind. The **output gate** closes that gap:
+`flywheel update --status done` is refused until the idea has a valid report.
+
+The done transition is the single choke point both run modes pass through (the
+headless runner and the in-harness agent both close out via `update`), so the
+gate covers both. By default the report is validated against the
+[`reportly`](https://github.com/dtch1997/reportly) standard (finding-as-H1,
+TL;DR / Setup / Result / Reproduce, figures-exist, provenance footer):
+
+```bash
+flywheel update exp --status done --report runs/exp/report.md   # lints first
+# refused → prints the reportly issues; the idea stays 'running'
+flywheel update exp --status done --report runs/exp/report.md --no-gate  # override
+```
+
+Configure it in `[output]` (`flywheel init` scaffolds this):
+
+```toml
+[output]
+require_report = true
+validator      = "reportly"   # "reportly" (lint) | "none" (exists-only)
+level          = "error"      # reportly fail threshold: "error" | "warn"
+report_link    = "report"
+```
+
+`validator = "reportly"` needs reportly installed (`pip install '.[reportly]'`, or
+`uv tool install --with reportly`); it degrades to a clear error, not a crash, if
+absent. The gate is a swappable seam (`OutputGate` in `flywheel/output.py`) — a
+project with a different report standard implements it and wires it in, mirroring
+the `Backlog`/`Guardrails`/`Runner` seams. Like everything else: mechanism
+(deterministic validation) stays separate from judgment (the agent's write-up).
 
 ## Session provenance
 

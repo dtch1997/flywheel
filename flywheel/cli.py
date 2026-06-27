@@ -68,6 +68,14 @@ bin  = "claude"
 # [prompt]
 # protocol_file = "EXPERIMENT_PROTOCOL.md"   # override the built-in protocol
 # template_file = "ITERATION_PROMPT.md"      # override the whole prompt
+
+[output]
+# A run's output must be a persistable report. `update --status done` is gated
+# on it: no valid report -> the idea can't be marked done (override: --no-gate).
+require_report = true
+validator      = "reportly"   # "reportly" (lint the report) | "none" (exists-only)
+level          = "error"      # reportly fail threshold: "error" | "warn"
+report_link    = "report"     # which link field holds the report path
 """
 
 
@@ -218,7 +226,7 @@ def cmd_update(args) -> int:
     if args.notes is not None:
         fields["notes"] = args.notes
     links = {}
-    for k in ("spec", "postmortem", "results", "pr", "session", "transcript"):
+    for k in ("spec", "postmortem", "results", "report", "pr", "session", "transcript"):
         v = getattr(args, k)
         if v is not None:
             links[k] = v
@@ -227,6 +235,26 @@ def cmd_update(args) -> int:
     if not fields:
         print("nothing to update", file=sys.stderr)
         return 2
+
+    # Output gate: a run's *output* must be a persistable report. Refuse the
+    # done transition until one exists and validates — covers both the headless
+    # runner and the in-harness agent, since both close out via `update`.
+    if fields.get("status") == Status.DONE.value and not args.no_gate:
+        current = backlog.get(args.id)
+        if current is None:
+            print(f"error: no idea with id {args.id!r}", file=sys.stderr)
+            return 1
+        try:
+            result = cfg.gate().check(current, report_path=args.report)
+        except RuntimeError as e:  # validator not installed / misconfigured
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        if not result.ok:
+            print(f"refusing to mark {args.id!r} done: {result.reason}",
+                  file=sys.stderr)
+            print("(fix the report, or pass --no-gate to override)", file=sys.stderr)
+            return 1
+
     try:
         idea = backlog.update(args.id, **fields)
     except KeyError as e:
@@ -496,9 +524,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--spec")
     sp.add_argument("--postmortem")
     sp.add_argument("--results")
+    sp.add_argument("--report", help="path to the run's report (gated on --status done)")
     sp.add_argument("--pr")
     sp.add_argument("--session", help="agent session id (provenance)")
     sp.add_argument("--transcript", help="path to the session transcript")
+    sp.add_argument("--no-gate", action="store_true",
+                    help="skip the output gate when marking done (override)")
     sp.set_defaults(func=cmd_update)
 
     sp = sub.add_parser("spend", help="log spend")
