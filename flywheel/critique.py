@@ -17,14 +17,17 @@ from mechanism; like triage, it only reads the report and writes feedback.
 from __future__ import annotations
 
 import datetime as _dt
+import importlib.resources as _resources
 import json
 import os
 from typing import Optional
 
-# A compact, self-contained form of the AMR evidence framework (arXiv
-# 2606.07612). Projects override it with the fuller write-up via
-# [critique] rubric_file (in jarvis: the lab-notes-jarvis AMR note).
-DEFAULT_RUBRIC = """\
+# The default rubric is the AMR (Anthropomorphic Misalignment Research) evidence
+# framework, vendored into the package at flywheel/rubrics/. It ships with the
+# install and is the built-in default; projects override it with their own via
+# [critique] rubric_file. A compact copy is kept inline as a last-resort fallback
+# in case the packaged resource can't be read.
+_FALLBACK_RUBRIC = """\
 AMR (Anthropomorphic Misalignment Research) evidence framework — grade how much
 the evidence actually licenses. Core rule: the evidence required scales with the
 claim; downgrade any claim the methods don't reach.
@@ -65,6 +68,19 @@ VERDICT = (claimed rung Lx; earned rung Ly ≤ x; the C-gap {Ci} driving x→y; 
 R-fix {Rj} that would close it; and a one-paragraph "what we can actually
 conclude" stated at the EARNED rung).
 """
+
+
+def _load_default_rubric() -> str:
+    """The vendored AMR rubric shipped in the package, or the inline fallback."""
+    try:
+        return (_resources.files("flywheel")
+                .joinpath("rubrics/amr-evidence-framework.md")
+                .read_text(encoding="utf-8"))
+    except (FileNotFoundError, ModuleNotFoundError, OSError, AttributeError):
+        return _FALLBACK_RUBRIC
+
+
+DEFAULT_RUBRIC = _load_default_rubric()
 
 CRITIQUE_TEMPLATE = """\
 You are CRITIQUING a finished experiment's write-up against the rubric below, to

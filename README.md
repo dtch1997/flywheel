@@ -126,7 +126,8 @@ report *exists and is well-formed*; **critique** asks the harder question the
 report can't ask of itself: *given the rubric, how much does the evidence
 actually license?* After a run, an agent grades the write-up and emits a verdict.
 The default rubric is the **AMR (Anthropomorphic Misalignment Research) evidence
-framework** — an L1→L3 evidence ladder (behavioral → functional →
+framework** (vendored into the package at `flywheel/rubrics/`, so it ships with
+the install) — an L1→L3 evidence ladder (behavioral → functional →
 causal-mechanistic), 12 recommendations (R1–R12) and 9 failure modes (C1–C9). Its
 verdict is the tuple **(claimed rung, earned rung, the C-gap between them, the
 R-fix that would close it)** plus a plain "what we can actually conclude" stated

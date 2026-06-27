@@ -28,6 +28,7 @@ allow-direct-references = true   # git refs in [project.optional-dependencies]
 
 [tool.hatch.build.targets.wheel]
 packages = ["flywheel"]
+artifacts = ["flywheel/rubrics/*.md"]   # ship the vendored default rubric
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

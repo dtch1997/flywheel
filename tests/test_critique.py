@@ -36,6 +36,13 @@ def test_parse_missing_returns_empty():
     assert obj["earned_rung"] == "" and obj["followups"] == []
 
 
+def test_default_rubric_is_vendored_full_note():
+    # the vendored AMR note, not the inline fallback (which lacks these)
+    assert "diagnostic checklist" in DEFAULT_RUBRIC.lower()
+    assert "Goldowsky-Dill" in DEFAULT_RUBRIC
+    assert "vendored_from" in DEFAULT_RUBRIC  # frontmatter provenance
+
+
 def test_build_prompt_includes_rubric_and_report():
     idea = Idea.new("models scheme", id="exp")
     p = build_critique_prompt(DEFAULT_RUBRIC, "THE REPORT BODY", idea, context="CTX")
