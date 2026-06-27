@@ -94,6 +94,7 @@ protocol_file = "EXPERIMENT_PROTOCOL.md"      # override the built-in protocol
 | `flywheel prompt` | print the iteration prompt (in-harness driver) |
 | `flywheel run --max-iters N` | drive N headless iterations |
 | `flywheel triage [--run \| --apply -]` | an agent re-prioritizes the backlog |
+| `flywheel critique [id] [--run \| --apply -]` | an agent grades a finished report against the rubric (feedback) |
 | `flywheel dashboard [--serve] [--watch]` | live status page via stagehand (optional) |
 | `flywheel session --idea <id> [--archive DIR]` | record the agent session (provenance) on an idea |
 
@@ -117,6 +118,41 @@ The triage agent is told to reward **replicating a surprising-but-unconfirmed
 result** over piling up new hypotheses, and to weigh novelty, info-per-dollar,
 and north-star fit. Each pass is logged to `.flywheel/triage.jsonl`. Drive the
 loop as **triage → `next` → run** instead of blindly popping the queue.
+
+## Critique — what can we actually conclude?
+
+The [output gate](#output-gate--a-run-must-leave-something-behind) checks the
+report *exists and is well-formed*; **critique** asks the harder question the
+report can't ask of itself: *given the rubric, how much does the evidence
+actually license?* After a run, an agent grades the write-up and emits a verdict.
+The default rubric is the **AMR (Anthropomorphic Misalignment Research) evidence
+framework** (vendored into the package at `flywheel/rubrics/`, so it ships with
+the install) — an L1→L3 evidence ladder (behavioral → functional →
+causal-mechanistic), 12 recommendations (R1–R12) and 9 failure modes (C1–C9). Its
+verdict is the tuple **(claimed rung, earned rung, the C-gap between them, the
+R-fix that would close it)** plus a plain "what we can actually conclude" stated
+at the *earned* rung.
+
+```bash
+flywheel critique            # critique the last done report (in-harness prompt);
+                             # the agent returns the verdict JSON ...
+flywheel critique exp --apply -   # ... which you pipe back in to record it
+flywheel critique exp --run       # or: run the critique agent headlessly + apply
+```
+
+Crucially this is **feedback, not a gate** — it never blocks `done`. Recording a
+critique (1) writes a `critiques/<id>.md` artifact and attaches it + a one-line
+verdict to the idea, and (2) **files the rubric's R-fixes as follow-up ideas**
+(`source: <id>:critique`) back onto the backlog. So a weak experiment — one whose
+prose claims L3 on L1 evidence — automatically seeds the controls/ablations that
+would earn the rung it claimed, and the next iteration picks them up. Add a
+`recent_glob` source over `critiques/*.md` (the scaffold suggests one) so each
+iteration also *reads* what the last experiments could and couldn't conclude.
+
+Configure in `[critique]`: `rubric_file` (override the built-in AMR rubric),
+`dir` (where artifacts go), `file_followups` (toggle the auto-filing). Each pass
+is logged to `.flywheel/critique.jsonl`. Drive the loop as **run → critique →
+triage → next**: conclude honestly, let the gaps become the next experiments.
 
 ## Output gate — a run must leave something behind
 

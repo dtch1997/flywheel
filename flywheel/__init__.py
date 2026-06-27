@@ -16,6 +16,9 @@ from .provenance import (
     current_session_id, transcript_path, archive_transcript,
 )
 from .triage import build_triage_prompt, apply_triage, parse_rankings
+from .critique import (
+    build_critique_prompt, apply_critique, parse_critique, DEFAULT_RUBRIC,
+)
 from .output import (
     OutputGate, GateResult, ReportlyGate, NullGate, make_gate,
 )
@@ -46,6 +49,10 @@ __all__ = [
     "build_triage_prompt",
     "apply_triage",
     "parse_rankings",
+    "build_critique_prompt",
+    "apply_critique",
+    "parse_critique",
+    "DEFAULT_RUBRIC",
     "OutputGate",
     "GateResult",
     "ReportlyGate",
